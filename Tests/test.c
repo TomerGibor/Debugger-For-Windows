@@ -1,11 +1,22 @@
 #include <stdio.h>
 
-void print(int i){
-    printf("%d: The debugee is running!!!\n", i);
+int add(int a, int b){
+    int temp = a;
+    a = b;
+    b = temp;
+    printf("a=%d, b=%d, a+b=%d\n", a, b, a+b);
+    return a+b;
 }
+
 int main(){
     int i = 0;
-    for (i = 0; i < 10; i++)
-	    print(i);
+    char* strs[] = {"hello", "world", "!"};
+
+    for (i = 0; i < 3; i++)
+        printf("i: %d, str: %s\n", i, strs[i]);
+
+    i = add(10, 5);
+    printf("Sum: %d\n", i);
+
 	return 0;
 }

@@ -15,7 +15,7 @@ command_handler_table_entry_t handlers[] = {
 	{{"run", "r", NULL}, handle_run},
 	{{"breakpoint", "bp", "b"}, handle_breakpoint},
 	{{"p", "print", NULL}, handle_print},
-	{{"re_insert_bp", NULL, NULL}, handle_stepi},
+	{{"stepi", NULL, NULL}, handle_stepi},
 	{{"continue", "c", NULL}, handle_continue},
 	{{"delete", "d", NULL}, handle_delete},
 	{{"exit", "quit", NULL}, handle_exit},
@@ -215,7 +215,7 @@ error_t handle_breakpoint(command_t* cmnd, PBOOL need_wait)
 		return ERROR_INVALID_COMMAND_ARGUMENT;
 	if (!insert_bp(cmnd->args[0].u.number))
 	{
-		printf("Successfully inserted breakpoint at number %llu\n", cmnd->args[0].u.number);
+		printf("Successfully inserted breakpoint at offset %#llx\n", cmnd->args[0].u.number);
 		printf("Breakpoint address: %#llx\n", cmnd->args[0].u.number + (DWORD64)base_of_image);
 		return SUCCESS;
 	}
@@ -225,6 +225,11 @@ error_t handle_breakpoint(command_t* cmnd, PBOOL need_wait)
 error_t handle_stepi(command_t* cmnd, PBOOL need_wait)
 {
 	CONTEXT context = {0};
+	if (!running)
+	{
+		printf("You must run the process first!\n");
+		return ERROR_HANDLE_COMMAND_FAILURE;
+	}
 	context.ContextFlags = CONTEXT_ALL;
 	if (!GetThreadContext(pi.hThread, &context))
 	{
@@ -235,11 +240,15 @@ error_t handle_stepi(command_t* cmnd, PBOOL need_wait)
 	if (context.Rip - 1 == current_bp_address) // currently at breakpoint
 	{
 		context.Rip--;
-		if (!remove_bp(context.Rip - (DWORD64)base_of_image))
+		if (remove_bp(context.Rip - (DWORD64)base_of_image))
 			return ERROR_HANDLE_COMMAND_FAILURE;
 		re_insert_bp = TRUE;
 	}
-	SetThreadContext(pi.hThread, &context);
+	if (!SetThreadContext(pi.hThread, &context))
+	{
+		printf("SetThreadContext failed to set context with error: %lu\n", GetLastError());
+		return ERROR_CONTEXT_FAILURE;
+	}
 	*need_wait = TRUE;
 	ContinueDebugEvent(pi.dwProcessId, pi.dwThreadId, DBG_CONTINUE);
 	return SUCCESS;
@@ -248,6 +257,11 @@ error_t handle_stepi(command_t* cmnd, PBOOL need_wait)
 error_t handle_continue(command_t* cmnd, PBOOL need_wait)
 {
 	CONTEXT context = {0};
+	if (!running)
+	{
+		printf("You must run the process first!\n");
+		return ERROR_HANDLE_COMMAND_FAILURE;
+	}
 	context.ContextFlags = CONTEXT_ALL;
 	if (!GetThreadContext(pi.hThread, &context))
 	{
@@ -263,11 +277,14 @@ error_t handle_continue(command_t* cmnd, PBOOL need_wait)
 
 	context.EFlags |= STEPI_FLAG; // set trap flag, which raises "single-step" exception
 	context.Rip--;
-	if (!remove_bp(context.Rip - (DWORD64)base_of_image))
+	if (remove_bp(context.Rip - (DWORD64)base_of_image))
 		return ERROR_HANDLE_COMMAND_FAILURE;
-	SetThreadContext(pi.hThread, &context);
+	if (!SetThreadContext(pi.hThread, &context))
+	{
+		printf("SetThreadContext failed to set context with error: %lu\n", GetLastError());
+		return ERROR_CONTEXT_FAILURE;
+	}
 	*need_wait = TRUE;
-	current_bp_address = 0;
 	re_insert_bp = TRUE;
 	ContinueDebugEvent(pi.dwProcessId, pi.dwThreadId, DBG_CONTINUE);
 	return SUCCESS;

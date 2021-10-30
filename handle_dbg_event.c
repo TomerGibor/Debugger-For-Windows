@@ -28,8 +28,6 @@ error_t handle_dbg_event(LPDEBUG_EVENT debug_event, PBOOL continue_event)
 
 error_t handle_exception_dbg_event(LPDEBUG_EVENT debug_event, PBOOL continue_event)
 {
-	CONTEXT context = {0};
-
 	printf("Exception debug event triggered: event number %lu\n", debug_event->dwDebugEventCode);
 	printf("Exception code: %#llx\n", debug_event->u.Exception.ExceptionRecord.ExceptionCode);
 	printf("Exception address: %#llx\n", debug_event->u.Exception.ExceptionRecord.ExceptionAddress);
@@ -42,18 +40,12 @@ error_t handle_exception_dbg_event(LPDEBUG_EVENT debug_event, PBOOL continue_eve
 		current_bp_address = (ULONG64)debug_event->u.Exception.ExceptionRecord.ExceptionAddress;
 		break;
 	case EXCEPTION_SINGLE_STEP:
-		context.ContextFlags = CONTEXT_ALL;
-		if (!GetThreadContext(pi.hThread, &context))
-		{
-			printf("GetThreadContext failed to obtain context with error: %lu", GetLastError());
-			return ERROR_CONTEXT_FAILURE;
-		}
-		if (!stepi && context.Rip == current_bp_address)
-			insert_bp(current_bp_address);
 
-		stepi = FALSE;
+		if (re_insert_bp)
+			insert_bp(current_bp_address - (ULONG64)base_of_image);
+
+		re_insert_bp = FALSE;
 		*continue_event = TRUE;
-
 		break;
 	}
 	return SUCCESS;

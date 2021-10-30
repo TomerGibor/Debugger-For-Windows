@@ -19,7 +19,7 @@ typedef struct command_handler_table_entry_s
 } command_handler_table_entry_t;
 
 extern BOOL running;
-extern ULONG64 bp_address;
+extern BOOL re_insert_bp;
 
 
 error_t handle_command(command_t* cmnd, PBOOL need_wait);
