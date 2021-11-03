@@ -46,7 +46,7 @@ dbg $
 
   ##### Note
 
-  All numbers may be entered as either hexadecimal (0xf00dbabe) or in base 10 (decimal).
+  All numbers may be entered as either hexadecimal (e.g. 0xf00dbabe) or in base 10 (decimal).
 
   
 
