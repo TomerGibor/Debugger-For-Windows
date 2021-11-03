@@ -40,12 +40,13 @@ error_t handle_exception_dbg_event(LPDEBUG_EVENT debug_event, PBOOL continue_eve
 		current_bp_address = (ULONG64)debug_event->u.Exception.ExceptionRecord.ExceptionAddress;
 		break;
 	case EXCEPTION_SINGLE_STEP:
-
 		if (re_insert_bp)
 			insert_bp(current_bp_address - (ULONG64)base_of_image);
 
 		re_insert_bp = FALSE;
-		*continue_event = TRUE;
+		if (is_continue)
+			*continue_event = TRUE;
+		is_continue = FALSE;
 		break;
 	}
 	return SUCCESS;

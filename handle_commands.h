@@ -20,6 +20,7 @@ typedef struct command_handler_table_entry_s
 
 extern BOOL running;
 extern BOOL re_insert_bp;
+extern BOOL is_continue;
 
 
 error_t handle_command(command_t* cmnd, PBOOL need_wait);

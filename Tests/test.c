@@ -13,7 +13,7 @@ int main(){
     char* strs[] = {"hello", "world", "!"};
 
     for (i = 0; i < 3; i++)
-        printf("i: %d, str: %s\n", i, strs[i]);
+        printf("i: %d, str: %s, 0x%p\n", i, strs[i], &strs[i]);
 
     i = add(10, 5);
     printf("Sum: %d\n", i);

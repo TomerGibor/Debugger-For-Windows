@@ -8,6 +8,7 @@
 
 BOOL running = FALSE;
 BOOL re_insert_bp = FALSE;
+BOOL is_continue = FALSE;
 
 command_handler_table_entry_t handlers[] = {
 	{{"info", "i", NULL}, handle_info},
@@ -47,7 +48,7 @@ static error_t print_str(ULONG64 address)
 	int count = 0;
 	while (c != 0 && count < 1000)
 	{
-		res = ReadProcessMemory(pi.hProcess, (void*)address, &c, 1, NULL);
+		res = ReadProcessMemory(pi.hProcess, (void*)(address + count), &c, 1, NULL);
 		if (!res)
 		{
 			printf("ReadProcessMemory failed to read memory with error: %lu\n", GetLastError());
@@ -183,7 +184,11 @@ error_t handle_help(command_t* cmnd, PBOOL need_wait)
 		"\t- print <address> <num_bytes> | p <address> <num_bytes> - prints out the `num_bytes` bytes starting from `address`.\n"
 		"\t- print str <address> | p str <address> - prints out the ascii chars starting from `address`, going on until reaching a \\0, or 1000 chars have been printed.\n"
 		"\t- run | r - runs the executable.\n"
-		//TODO
+		"\t- stepi - single-step (executes one instruction).\n"
+		"\t- breakpoint <address> | bp <address> | b <address> - puts a breakpoint at that address.\n"
+		"\t- continue | c - continues execution until a breakpoint is reached.\n"
+		"\t- delete <address> | d <address> - removes the breakpoint at that address.\n"
+		"\t- exit | quit - exits the debugger.\n"
 		"\n"
 	);
 	return SUCCESS;
@@ -191,7 +196,6 @@ error_t handle_help(command_t* cmnd, PBOOL need_wait)
 
 error_t handle_run(command_t* cmnd, PBOOL need_wait)
 {
-	char run_again = 0;
 	CONTEXT context = {0};
 
 	if (!running)
@@ -240,9 +244,9 @@ error_t handle_stepi(command_t* cmnd, PBOOL need_wait)
 	if (context.Rip - 1 == current_bp_address) // currently at breakpoint
 	{
 		context.Rip--;
-		if (remove_bp(context.Rip - (DWORD64)base_of_image))
+		if (current_bp_address && remove_bp(context.Rip - (DWORD64)base_of_image))
 			return ERROR_HANDLE_COMMAND_FAILURE;
-		re_insert_bp = TRUE;
+		re_insert_bp = current_bp_address ? TRUE : FALSE;
 	}
 	if (!SetThreadContext(pi.hThread, &context))
 	{
@@ -268,6 +272,13 @@ error_t handle_continue(command_t* cmnd, PBOOL need_wait)
 		printf("GetThreadContext failed to obtain context with error: %lu\n", GetLastError());
 		return ERROR_CONTEXT_FAILURE;
 	}
+	if (!current_bp_address) // breakpoint was deleted
+	{
+		context.Rip--;
+		SetThreadContext(pi.hThread, &context);
+		ContinueDebugEvent(pi.dwProcessId, pi.dwThreadId, DBG_CONTINUE);
+		return SUCCESS;
+	}
 	if (context.Rip - 1 != current_bp_address) // already stepi-ed out of breakpoint
 	{
 		current_bp_address = 0;
@@ -286,6 +297,7 @@ error_t handle_continue(command_t* cmnd, PBOOL need_wait)
 	}
 	*need_wait = TRUE;
 	re_insert_bp = TRUE;
+	is_continue = TRUE;
 	ContinueDebugEvent(pi.dwProcessId, pi.dwThreadId, DBG_CONTINUE);
 	return SUCCESS;
 }
@@ -297,7 +309,10 @@ error_t handle_delete(command_t* cmnd, PBOOL need_wait)
 		return ERROR_INVALID_COMMAND_ARGUMENT;
 	if (!remove_bp(cmnd->args[0].u.number))
 	{
-		printf("Successfully removed breakpoint at number %llu\n", cmnd->args[0].u.number);
+		printf("Successfully removed breakpoint at offset %#llx\n", cmnd->args[0].u.number);
+		if (cmnd->args[0].u.number + (ULONG64)base_of_image == current_bp_address)
+			// no need to remove and re-insert breakpoint in continue or stepi
+			current_bp_address = 0;
 		return SUCCESS;
 	}
 	return ERROR_HANDLE_COMMAND_FAILURE;
